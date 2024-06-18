@@ -11,7 +11,7 @@ import postgresql_db as pgdb
 from ib_insync import IB
 from pytz import timezone
 
-from m_objects import JSONEncoderCustom
+# from m_objects import JSONEncoderCustom
 from credentials import postgres_db
 from postgresql_db import connect as psql_connect, create_engine as psql_create_engine, composed_from_join
 from inspect import signature
