@@ -11,7 +11,8 @@ import decortools as dt
 import m_db as mdb
 from news_scrapers import NewsScraper
 from api_keys import ALPHA_VANTAGE_KEY
-import datetime_functions as dtf
+# import datetime_functions as dtf
+from decortools import datetime_functions as dtf
 
 
 logging.getLogger('fake_useragent').setLevel(logging.ERROR)
