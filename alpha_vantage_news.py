@@ -11,18 +11,19 @@ import decortools as dt
 import m_db as mdb
 from news_scrapers import NewsScraper
 from api_keys import ALPHA_VANTAGE_KEY
-# import datetime_functions as dtf
-from decortools import datetime_functions as dtf
+import datetime_functions as dtf
 
 
 logging.getLogger('fake_useragent').setLevel(logging.ERROR)
 datetime_column = 'time_published'
 
+TICKER = 'GSPC'  # 'SPY'
+TABLE_ID = dict(schema='news_data', table_name='all_news', primary_keys=['url'])
 
-@dt.dynamic_date_range_decorator(start_name='time_from', end_name='time_to', result_date_accessor_fn=lambda x: x[datetime_column], aggregate_fn=lambda x: pd.concat(x))
+
 @dt.df_manipulator_decorator(dtf.series_str2datetime, apply_func_to_series=datetime_column, after=True)
-@mdb.return_df_rows_not_in_table(table_name='news_data', primary_keys=['url'], suppress_error_no_table_exists=True)
-def get_historical_news(api_key, symbol, limit=1000, topics=None, time_from=None, time_to=None, sort=None, test_domains=False, domain=None, debug=True):
+@mdb.return_df_rows_not_in_table(**TABLE_ID, suppress_error_no_table_exists=True)
+def get_historical_news(api_key, symbol, limit=1000, topics=None, time_from=None, time_to=None, sort=None, test_domains=False, domain=None, debug=False):
     print(f"Fetching news for {symbol} from {time_from} to {time_to}.")
     """
     Fetch historical news articles for a given stock symbol using the Alpha Vantage API and optionally test domain access.
@@ -52,7 +53,9 @@ def get_historical_news(api_key, symbol, limit=1000, topics=None, time_from=None
         'sort': sort
     }
     if debug:
-        return mdb.get_table_as_df('news_data')
+        table_id = TABLE_ID.copy()
+        table_id.pop('primary_keys')
+        return mdb.get_table_as_df(**table_id)
     try:
         response = requests.get(base_url, params={k: v for k, v in params.items() if v is not None})
         response.raise_for_status()
@@ -63,9 +66,11 @@ def get_historical_news(api_key, symbol, limit=1000, topics=None, time_from=None
 
     if "feed" in data and data["feed"]:
         news_articles = data["feed"]
+
         if test_domains:
             return test_article_accessibility(news_articles, select_domain=domain)
         else:
+            print(len(news_articles), "news articles found.")
             return pd.DataFrame(news_articles)
     else:
         logging.error(data)
@@ -73,6 +78,12 @@ def get_historical_news(api_key, symbol, limit=1000, topics=None, time_from=None
             print("No news articles found.")
         else:
             raise ValueError(data)
+
+
+
+
+
+
 
 
 def test_article_accessibility(news_articles, select_domain=None):
@@ -125,33 +136,41 @@ def test_article_accessibility(news_articles, select_domain=None):
     print("\n" + "=" * 50 + "\n")
 
 
-@mdb.upsert_df2db_decorator(table_name='news_data', primary_keys='url')
+@dt.dynamic_date_range_decorator(start_name='time_from', end_name='time_to', result_date_accessor_fn=lambda x: x[datetime_column], aggregate_fn=lambda x: pd.concat(x))
+@mdb.upsert_df2db_decorator(**TABLE_ID)
+# @dt.df_manipulator_decorator(dt.concurrent_groupby_apply, groupby='domain', after=False, pass_function=True)
 @dt.copy_signature(get_historical_news)
 def get_historical_news_full(*args, **kwargs):
     print(kwargs.get('time_from'), kwargs.get('time_to'))
     news_articles = get_historical_news(*args, **kwargs)
-    print(f'Fetched full articles for {len(news_articles)} news articles.')
-    scraper = NewsScraper()
+    domains = set(news_articles['source_domain'].str.replace('www.', ''))
+    if len(domains) == 1:
+        domain = domains.pop()
+        scraper = NewsScraper(domain=domain)
+    else:
+        scraper = NewsScraper()
+    html_dict = {}
     # Use the batch processing method provided by the NewsScraper class
     if hasattr(scraper, 'parse_articles_batch'):
         urls = news_articles['url'].tolist()
-        full_texts_dict = scraper.parse_articles_batch(urls)
+        full_texts_dict = scraper.parse_articles_batch(urls, html_dict=html_dict)
         # Convert dictionary results to align with the DataFrame
         news_articles['full_text'] = news_articles['url'].map(full_texts_dict)
     else:
         # Fall back to row-wise processing if batch processing is not available
-        news_articles['full_text'] = news_articles['url'].apply(scraper.parse_article)
-
+        news_articles['full_text'] = news_articles['url'].apply(scraper.parse_article, html_dict=html_dict)
+    news_articles['html'] = news_articles['url'].map(html_dict)
+    print(f'Fetched full articles for {len(news_articles)} news articles.')
     return news_articles
 
 
 # Example usage
 if __name__ == "__main__":
     api_key_ = ALPHA_VANTAGE_KEY
-    symbol_ = 'AAPL'
-    # df = get_historical_news(api_key_, symbol_, limit=50, topics='technology',  time_from='20230101T0000',
+    # df = get_historical_news(api_key_, TICKER, limit=50, topics='technology',  time_from='20230101T0000',
     #                            time_to=None, test_domains=False)
     # df
-    df = get_historical_news_full(api_key_, symbol_, limit=50, topics='technology',  time_from='20230101T0000',
+    # , topics='technology'
+    df = get_historical_news_full(api_key_, None, limit=1000, time_from='20230101T0000',
                                time_to=None, test_domains=False)
     df

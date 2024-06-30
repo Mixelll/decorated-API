@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError, NoSuchTableError, InvalidRequestErro
 import sqlalchemy.dialects.postgresql as pg
 
 import extra_functions as ef
-from sqa_types import pd_determine_sqlalchemy_type
+from sqa_types import pd_determine_sqlalchemy_special_types, pd_determine_sqlalchemy_types
 
 
 def connect(*, dbname=None, user=None, password=None, **kwargs):
@@ -52,9 +52,14 @@ def upsert_dataframe_sqa(engine, df, table, schema=None, primary_keys=None):
         table = None
 
     if table is None:
+        dtype_mapping = {}
         logging.info(f"Table '{table_name}' does not exist. Creating table...")
-        dtype_mapping_manual = {col: pd_determine_sqlalchemy_type(df[col]) for col in df.columns}
-        dtype_mapping = {k: v for k, v in dtype_mapping_manual.items() if v is not None}
+        for col_name, series in df.items():
+            sql_type, convert_fn = pd_determine_sqlalchemy_special_types(series, conversion=True)
+            if convert_fn is not None:
+                df[col_name] = series.apply(convert_fn)
+            if sql_type is not None:
+                dtype_mapping[col_name] = sql_type
         df.to_sql(table_name, engine, schema=schema, index=False, if_exists='replace', dtype=dtype_mapping)
         if primary_keys:
             add_primary_key(engine, table_name, primary_keys)
@@ -121,6 +126,9 @@ def return_df_rows_not_in_table(engine, df, table_name, schema=None, primary_key
                 raise e
         primary_keys = keys if keys else [c for c in df.columns]
 
+    if not isinstance(primary_keys, (list, tuple)):
+        primary_keys = [primary_keys]
+
     df_keys = pd.DataFrame(df[primary_keys])
     temp_table = table_name + '_temp'
     table_names = [(schema, table_name), (schema, temp_table)]
@@ -185,8 +193,10 @@ def update_table_schema_sqa(engine, df, table_name, schema=None, primary_keys=No
 
     for column, series in df.items():
         if column not in existing_columns:
-            sql_type = pd_determine_sqlalchemy_type(series)
-            alter_command = f"ALTER TABLE {table_name} ADD COLUMN {column} {sql_type}"
+            sql_type, convert_fn = pd_determine_sqlalchemy_types(series, conversion=True)
+            if convert_fn is not None:
+                df[column] = series.apply(convert_fn)
+            alter_command = f"ALTER TABLE {table_name} ADD COLUMN {column} {sql_type.compile(dialect=engine.dialect)}"
             with engine.connect() as conn:
                 with conn.begin() as t:
                     conn.execute(sqa.text(alter_command))
@@ -271,13 +281,17 @@ def vacuum_table(conn_or_engine, table, schema=None, analyze=False):
     pg_execute(conn, query, commit=True)
 
 
-def get_table_as_df(engine, tbl, params=None, index=None, between=None, except_columns=None, *args, **kwargs):
+def get_table_as_df(engine, table_name, schema=None, columns=None, params=None, index=None, between=None, except_columns=None, limit=None):
+    tbl = [schema, table_name]
     if params is None:
         params = []
     where_between = None if index is None or between is None else [index, between]
-    fn_query = lambda *_a, **_k: composed_select_from_table(tbl, params=params, where_between=where_between, *args,
-                                                                 *_a, **kwargs, **_k)
-    if except_columns is not None:
+    fn_query = lambda *_a, **_k: composed_select_from_table(tbl, params=params, where_between=where_between, *_a, **_k) + (S(' LIMIT {}').format(limit) if limit else S(''))
+    if columns is not None:
+        if isinstance(columns, str):
+            columns = [columns]
+        query = fn_query(columns=columns)
+    elif except_columns is not None:
         if isinstance(except_columns, str):
             except_columns = [except_columns]
         tbl_columns = get_table_column_names(engine, tbl)
