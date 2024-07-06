@@ -103,6 +103,8 @@ class NewsScraper:
             find_what = fn_dict.get(urlparse(url).netloc) or fn_dict.get(urlparse(url).netloc.replace('www.', ''))
             if callable(find_what):
                 article_text = find_what(html)
+                if not article_text:
+                    return ''
                 if not isinstance(article_text, str):
                     article_text = [prc_txt(x) for x in article_text]
                     len_lst = [len(x) for x in article_text]
@@ -127,7 +129,7 @@ class NewsScraper:
             ln2 = len(article_text) // 2
             print(url, f'len:{len(article_text)}', (article_text[:100] + '...' + article_text[ln2:ln2 + 100] + '...' + article_text[-100:]).replace('\n', ' '))
             return article_text
-        return "Failed to retrieve article."
+        return ''
 
     def parse_articles_batch(self, urls, **kwargs):
         """Parse multiple articles in a batch from a list of URLs."""

@@ -80,12 +80,6 @@ def get_historical_news(api_key, symbol, limit=1000, topics=None, time_from=None
             raise ValueError(data)
 
 
-
-
-
-
-
-
 def test_article_accessibility(news_articles, select_domain=None):
     domain_articles = {}
     for article in news_articles:
@@ -159,7 +153,7 @@ def get_historical_news_full(*args, **kwargs):
     else:
         # Fall back to row-wise processing if batch processing is not available
         news_articles['full_text'] = news_articles['url'].apply(scraper.parse_article, html_dict=html_dict)
-    news_articles['html'] = news_articles['url'].map(html_dict)
+    news_articles['html'] = news_articles['url'].map(html_dict).apply(lambda x: x.replace('\0', '') if x is not None else None)
     print(f'Fetched full articles for {len(news_articles)} news articles.')
     return news_articles
 

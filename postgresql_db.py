@@ -62,7 +62,7 @@ def upsert_dataframe_sqa(engine, df, table, schema=None, primary_keys=None):
                 dtype_mapping[col_name] = sql_type
         df.to_sql(table_name, engine, schema=schema, index=False, if_exists='replace', dtype=dtype_mapping)
         if primary_keys:
-            add_primary_key(engine, table_name, primary_keys)
+            add_primary_key(engine, table_name, primary_keys, schema=schema)
         return
 
     keys = [key.name for key in table.primary_key]
@@ -134,7 +134,7 @@ def return_df_rows_not_in_table(engine, df, table_name, schema=None, primary_key
     table_names = [(schema, table_name), (schema, temp_table)]
     temp_table_id = I_2(table_names[1])
     upsert_dataframe_sqa(engine, df_keys, temp_table, schema=schema, primary_keys=primary_keys)
-    comp = S('SELECT {} ').format(composed_columns(it.product([table_names[1]], primary_keys)))
+    comp = S('SELECT {} ').format(composed_columns(it.product([table_names[1]], primary_keys), flat_parse=True))
     comp += composed_from_join(tables=table_names, using=primary_keys)
     try:
         result = pg_execute(engine, comp, commit=False, mogrify_print=False)
@@ -203,7 +203,7 @@ def update_table_schema_sqa(engine, df, table_name, schema=None, primary_keys=No
                     logging.info(f"Added new column '{column}' with type '{sql_type}' to table '{table_name}' in schema '{schema}'.")
 
 
-def add_primary_key(engine, table_name, primary_keys):
+def add_primary_key(engine, table_name, primary_keys, schema=None):
     """
     Add a composite primary key to an existing table using a list of column names.
 
@@ -214,7 +214,8 @@ def add_primary_key(engine, table_name, primary_keys):
     """
     if isinstance(primary_keys, str):
         primary_keys = [primary_keys]
-    sql_command = f"""ALTER TABLE {table_name} ADD CONSTRAINT {table_name}_pk PRIMARY KEY ({', '.join(primary_keys)}); """.replace('\n', ' ')
+    table_name_schema = f"{schema}.{table_name}" if schema else table_name
+    sql_command = f"""ALTER TABLE {table_name_schema} ADD CONSTRAINT {table_name}_pk PRIMARY KEY ({', '.join(primary_keys)}); """.replace('\n', ' ')
 
     with engine.connect() as conn:
         with conn.begin() as t:
@@ -488,19 +489,20 @@ approvedExp = ['primary key', 'foreign key', 'references', 'default', 'uuid',
                 '/']
 
 
-def composed_columns(columns, enclose=False, parse=None, literal=None, **kwargs):
-    s = psg_operators()[0]
-    if parse is None:
+def composed_columns(columns, enclose=False, parse=None, literal=None, flat_parse=True, **kwargs):
+    if parse is None and not flat_parse:
         parse = lambda x: composed_separated(x, '.', **kwargs)
+    if parse is None and flat_parse:
+        parse = lambda x: composed_separated(ef.flatten(x, return_type=tuple), '.', **kwargs)
     if isinstance(columns, str):
         columns = [columns]
 
     if columns is None:
-        return s('*')
+        return S('*')
     else:
-        comp = s(', ').join(map(parse, columns))
+        comp = S(', ').join(map(parse, columns))
         if enclose:
-            return s('({})').format(comp)
+            return S('({})').format(comp)
         return comp
 
 
@@ -666,7 +668,7 @@ def composed_select_from_table(tbl, columns=None, where_between=None, params=Non
     :return:
         :Composable:, full select query which can be further used to compose
     """
-    query = S('SELECT {} FROM {} ').format(composed_columns(columns),I_2(tbl))
+    query = S('SELECT {} FROM {} ').format(composed_columns(columns), I_2(tbl))
     if where_between is not None:
         between = where_between[1]
         btw = composed_between(start=between[0], end=between[1])
