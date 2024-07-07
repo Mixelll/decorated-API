@@ -19,10 +19,11 @@ datetime_column = 'time_published'
 
 TICKER = 'GSPC'  # 'SPY'
 TABLE_ID = dict(schema='news_data', table_name='all_news', primary_keys=['url'])
+urls_in_db_col = 'get_full_text'
 
 
 @dt.df_manipulator_decorator(dtf.series_str2datetime, apply_func_to_series=datetime_column, after=True)
-@mdb.return_df_rows_not_in_table(**TABLE_ID, suppress_error_no_table_exists=True)
+@mdb.return_df_rows_not_in_table(**TABLE_ID, suppress_error_no_table_exists=True, add_column_instead=urls_in_db_col)
 def get_historical_news(api_key, symbol, limit=1000, topics=None, time_from=None, time_to=None, sort=None, test_domains=False, domain=None, debug=False):
     print(f"Fetching news for {symbol} from {time_from} to {time_to}.")
     """
@@ -137,6 +138,11 @@ def test_article_accessibility(news_articles, select_domain=None):
 def get_historical_news_full(*args, **kwargs):
     print(kwargs.get('time_from'), kwargs.get('time_to'))
     news_articles = get_historical_news(*args, **kwargs)
+    if urls_in_db_col in news_articles.columns:
+        news_articles = news_articles[news_articles[urls_in_db_col]]
+        news_articles.drop(columns=[urls_in_db_col], inplace=True)
+    # if news_articles is None or isinstance(news_articles, pd.DataFrame) and news_articles.empty:
+    #     return news_articles
     domains = set(news_articles['source_domain'].str.replace('www.', ''))
     if len(domains) == 1:
         domain = domains.pop()
@@ -147,6 +153,7 @@ def get_historical_news_full(*args, **kwargs):
     # Use the batch processing method provided by the NewsScraper class
     if hasattr(scraper, 'parse_articles_batch'):
         urls = news_articles['url'].tolist()
+        print(f'Fetching full articles for {len(urls)} news articles.')
         full_texts_dict = scraper.parse_articles_batch(urls, html_dict=html_dict)
         # Convert dictionary results to align with the DataFrame
         news_articles['full_text'] = news_articles['url'].map(full_texts_dict)

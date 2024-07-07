@@ -81,12 +81,6 @@ def find_tag_with_most_tags(html=None, parser=None, tags=(), recursive=False, re
                     break
                 max_p_count_local = max(max_p_count_local, total_p)
 
-        if final_tag:
-            print("Found the desired tag:")
-            print("HTML of the tag:")
-        else:
-            print("No such tag found.")
-
         if return_any:
             return tag_with_most_ps
         return final_tag

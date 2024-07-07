@@ -85,7 +85,7 @@ def upsert_dataframe_sqa(engine, df, table, schema=None, primary_keys=None):
             logging.info(f"Rows inserted/updated: {result.rowcount}")
 
 
-def return_df_rows_not_in_table(engine, df, table_name, schema=None, primary_keys=None, suppress_error_no_table_exists=False):
+def return_df_rows_not_in_table(engine, df, table_name, schema=None, primary_keys=None, suppress_error_no_table_exists=False, add_column_instead=None):
     """
     Returns rows from a DataFrame that are not present in the specified database table.
 
@@ -149,8 +149,12 @@ def return_df_rows_not_in_table(engine, df, table_name, schema=None, primary_key
 
     df_result = pd.DataFrame(result, columns=primary_keys)
     merged_df = df_keys.merge(df_result, on=primary_keys, how='left', indicator=True)
-    df_not_in_db = merged_df[merged_df['_merge'] == 'left_only'].drop(columns=['_merge'])
-    df_final = df_not_in_db.merge(df, on=primary_keys, how='left')
+    if add_column_instead is None:
+        df_not_in_db = merged_df[merged_df['_merge'] == 'left_only'].drop(columns=['_merge'])
+        df_final = df_not_in_db.merge(df, on=primary_keys, how='left')
+    else:
+        df[add_column_instead] = merged_df['_merge'] == 'left_only'
+        df_final = df
     if convert_type is not None:
         df_final = convert_type(df_final)
     return df_final
