@@ -20,6 +20,7 @@ datetime_column = 'time_published'
 TICKER = 'GSPC'  # 'SPY'
 TABLE_ID = dict(schema='news_data', table_name='all_news', primary_keys=['url'])
 urls_in_db_col = 'get_full_text'
+attrs_date_range = 'date_range'
 
 
 @dt.df_manipulator_decorator(dtf.series_str2datetime, apply_func_to_series=datetime_column, after=True)
@@ -131,16 +132,19 @@ def test_article_accessibility(news_articles, select_domain=None):
     print("\n" + "=" * 50 + "\n")
 
 
-@dt.dynamic_date_range_decorator(start_name='time_from', end_name='time_to', result_date_accessor_fn=lambda x: x[datetime_column], aggregate_fn=lambda x: pd.concat(x))
+@dt.dynamic_date_range_decorator(start_name='time_from', end_name='time_to', result_date_accessor_fn=lambda x: x.attrs[attrs_date_range], aggregate_fn=lambda x: pd.concat(x))
 @mdb.upsert_df2db_decorator(**TABLE_ID)
 # @dt.df_manipulator_decorator(dt.concurrent_groupby_apply, groupby='domain', after=False, pass_function=True)
 @dt.copy_signature(get_historical_news)
 def get_historical_news_full(*args, **kwargs):
     print(kwargs.get('time_from'), kwargs.get('time_to'))
     news_articles = get_historical_news(*args, **kwargs)
+    date_range = news_articles[datetime_column].agg(['min', 'max'])
     if urls_in_db_col in news_articles.columns:
         news_articles = news_articles[news_articles[urls_in_db_col]]
         news_articles.drop(columns=[urls_in_db_col], inplace=True)
+    news_articles.drop_duplicates(subset='url', inplace=True)
+    date_range.attrs[attrs_date_range] = date_range
     # if news_articles is None or isinstance(news_articles, pd.DataFrame) and news_articles.empty:
     #     return news_articles
     domains = set(news_articles['source_domain'].str.replace('www.', ''))

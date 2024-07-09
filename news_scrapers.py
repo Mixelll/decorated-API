@@ -31,6 +31,7 @@ class NewsScraper:
 
     def fetch_html(self, url):
         """Fetch the HTML of the news page, respecting domain-specific delays and error handling."""
+        # print(f'Fetching {url}...')
         domain = urlparse(url).netloc
         current_time = time.time()
         retry_count = self.failure_count.get(domain, 0)
