@@ -9,7 +9,6 @@ import traceback
 from collections import deque
 from collections.abc import Iterable
 from datetime import datetime, timedelta
-from decimal import Decimal
 from math import ceil, floor, log10
 
 import numpy as np
@@ -19,6 +18,7 @@ import pytz
 from datetime_functions import *
 from decortools import *
 from type_classes import *
+from base_functions import *
 
 
 # Setup logging configuration
@@ -94,6 +94,7 @@ class FunctionArgBinder:
         self.arg_changer_fn = arg_changer_fn
         self.arg_changer_fn_in = arg_changer_args_in
         self.arg_changer_fn_out = arg_changer_args_out if arg_changer_args_out else arg_changer_args_in
+
     def __call__(self, *args, **kwargs):
         bound_args = []
         if self.kwarg_binding:
@@ -148,12 +149,15 @@ class FunctionArgBinder:
 
         return self.function(*args_final, **total_kwargs)
 
+
 # lambda replacement for pickling
 class AccessorK:
     def __init__(self, key):
         self.key = key
+
     def __call__(self, x):
         return x[self.key]
+
 
 # lambda replacement for pickling
 class InRangeFn:
@@ -175,6 +179,7 @@ class InRangeFn:
 def str_ex_num(x):
     return x if isinstance(x, (str, Number)) else str(x)
 
+
 def pickle(obj, file=None):
     def _pickle(f, *args, **kwargs):
         with f(*args, **kwargs) as _file:
@@ -187,8 +192,10 @@ def pickle(obj, file=None):
     else:
         return _pickle(open, file, 'wb')
 
+
 def pickle_load(file):
     return pickle_pkg.load(open(file, 'rb'))
+
 
 # Useful
 class SortedDeque(deque):
@@ -224,7 +231,6 @@ class SortedDeque(deque):
                 return None
         else:
             return False if check_only else None
-
 
 
 def get_sub_lists_i(lst, i=0):
@@ -304,6 +310,7 @@ def max_nesting_level(lst):
 
     return get_depth(lst, 1)
 
+
 def is_slice_in_list(s, lis):
     len_s = len(s)
     return any(s == lis[i:len_s + i] for i in range(len(lis) - len_s + 1))
@@ -380,13 +387,35 @@ def sequential_permutations(vector):
     return [tuple(vector[:i+1]) for i in range(len(vector))]
 
 
+def coerce_to_integer_if_possible(value):
+    """Converts a float to an integer if it represents an integer value exactly."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
 def get_exponent(number):
-    sign, digits, exponent = Decimal(number).as_tuple()
-    return len(digits) + exponent - 1
+    # Convert the number to a string to handle it generically
+    number_str = f"{float(number):.15e}"  # Convert to scientific notation string
+
+    # Split at 'e' to separate the mantissa and exponent
+    mantissa, exponent = number_str.split('e')
+    return int(exponent)
 
 
 def get_mantissa(number):
-    return Decimal(number).scaleb(-get_exponent(number)).normalize()
+    # Convert the number to a string in scientific notation
+    number_str = f"{float(number):.15e}"  # Convert to scientific notation string
+
+    # Split at 'e' to separate the mantissa and exponent
+    mantissa, _ = number_str.split('e')
+    # Convert the mantissa to a float and check if it's an integer
+    mantissa_float = float(mantissa)
+    return coerce_to_integer_if_possible(mantissa_float)
+
+
+def get_mantissa_exponent(number):
+    return get_mantissa(number), get_exponent(number)
 
 
 def join_dataframes_on_index(dataframe_dict, single=lambda x: 'date' in x):
@@ -399,6 +428,7 @@ def join_dataframes_on_index(dataframe_dict, single=lambda x: 'date' in x):
         result_df = pd.merge(result_df, df.drop(columns=c[c.map(single)]), how='inner', left_index=True, right_index=True)
 
     return result_df
+
 
 def add_suffix_to_column_names(dataframe, prefix=None, suffix=None, sep='_', ignore=None):
     if not isinstance(dataframe, pd.DataFrame):
@@ -426,7 +456,6 @@ def ny_localize(ts):
     return pytz.timezone('America/New_York').localize(ts)
 
 
-
 def df_freq_dict(df, index = 'date'):
     freqs = ['20Y','10Y', '5Y', '3Y', 'Y', 'Q', 'M', 'W', '2D', 'D', '3H', 'H',
             '15m', '5m', '1m', '15s', '5s', '1s']
@@ -451,6 +480,7 @@ def df_freq_dict(df, index = 'date'):
                                     index, arrayOp=lambda x: {freqs[i]: x}))
 
     return stat_dict_inst
+
 
 def clean_split(split, index=None, num = 0.6):
     # print(split)
@@ -488,6 +518,7 @@ def clean_split(split, index=None, num = 0.6):
     # print([len(x) for x in split_cleanest])
     return split_cleanest
 
+
 def df_create_freq_splitter(df, index=None):
     if index is None:
         index = df.index.names[0]
@@ -508,8 +539,10 @@ def stat_dict(dfArray, index=None, arrayOp = None):
         'pd.describe': intervals(lambda x: x.describe())
     }
 
+
 def replace_inf_nan(df, what=None):
     return df.replace([np.inf, -np.inf, np.nan], what)
+
 
 def df_interval_split_op(dfArray, op, index=None):
     out = {}
@@ -525,6 +558,7 @@ def df_return_ind_col(df, index=None):
         return df.index
     else:
         return df[index]
+
 
 def df_check_ind(df, index):
     if index in df.index.names:
@@ -569,6 +603,7 @@ def df_time_mask(df, t, return_ind=True, **kwargs):
         return ind[contained]
     return contained
 
+
 def df_freq_split(df, freq, return_ind=False, **kwargs):
     ind = df_index_wrapper(df, to_series=True, **kwargs) if return_ind else df
     ind_fn = lambda x: x.index
@@ -576,10 +611,12 @@ def df_freq_split(df, freq, return_ind=False, **kwargs):
     return {pd.Interval(left=min(ind_fn(x)),  right=max(ind_fn(x)), closed='both'): dfx_fn(x)
             for _, x in ind.groupby(pd.Grouper(freq=freq)) if not x.empty}
 
+
 def pd_merge_intervals(intervals):
     mn = min(map(lambda x: x.left, intervals))
     mx = max(map(lambda x: x.right, intervals))
     return pd.Interval(mn,  mx, closed='both')
+
 
 def iter2list(o):
     # if (isinstance(o, range) or isinstance(o, types.GeneratorType)) and not isinstance(o, str):
@@ -598,11 +635,13 @@ def str2pd_interval(o, tz='America/New_York'):
 
     # return o
 
+
 def pd_interval2str(o):
     if isinstance(o, pd.Interval):
         oo = str(o)
         return oo[0] + str(o.left) + ',' + str(o.right) + oo[-1]
     return o
+
 
 def element_array_merge(a, b):
     if not isinstance(a, list):
@@ -612,6 +651,7 @@ def element_array_merge(a, b):
 
     a.extend(b)
     return a
+
 
 def dict_merge(a, b, m=0):
     "merges b into a"

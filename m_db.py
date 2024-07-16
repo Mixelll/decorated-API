@@ -31,8 +31,8 @@ def ib_connect(**kwargs):
     return ib
 
 
-postgres_inject_kw = dict(inject={'engine': create_db_engine}, execute_on_call=True)  # {0: 'df}
-df_postgres_inject_kw = dict(**postgres_inject_kw, output_to_input_map={0: 1})  # {0: 'df}
+postgres_inject_kw = dict(inject={'engine': create_db_engine}, execute_on_call=True)  # {0: 'df'}
+df_postgres_inject_kw = dict(**postgres_inject_kw, output_to_input_map={0: 1})  # {0: 'df'}
 
 upsert_df2db_decorator = dt.generate_decorator([pgdb.update_table_schema_sqa, pgdb.upsert_dataframe_sqa], **df_postgres_inject_kw)
 return_df_rows_not_in_table = dt.generate_decorator(pgdb.return_df_rows_not_in_table, **df_postgres_inject_kw, overwrite_output=True)

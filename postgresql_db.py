@@ -96,6 +96,7 @@ def return_df_rows_not_in_table(engine, df, table_name, schema=None, primary_key
         schema (str, optional): Schema of the database table.
         primary_keys (list, optional): List of column names to consider as primary keys for matching rows.
         suppress_error_no_table_exists (bool, optional): Suppress or raise error if the table does not exist.
+        add_column_instead (str, optional): Add a column to the DataFrame indicating if the row is not in the table.
 
     Returns:
         pandas.DataFrame: Rows from the input DataFrame that are not found in the database table.
@@ -153,6 +154,7 @@ def return_df_rows_not_in_table(engine, df, table_name, schema=None, primary_key
         df_not_in_db = merged_df[merged_df['_merge'] == 'left_only'].drop(columns=['_merge'])
         df_final = df_not_in_db.merge(df, on=primary_keys, how='left')
     else:
+        df.reset_index(drop=True, inplace=True)
         df[add_column_instead] = merged_df['_merge'] == 'left_only'
         df_final = df
     if convert_type is not None:

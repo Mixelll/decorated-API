@@ -12,8 +12,6 @@ from selenium.webdriver.chrome.options import Options
 
 import html_functions
 
-Options.headless = True
-
 
 class NewsScraper:
     def __init__(self, base_delay=3, random_factor=10, max_retries=3, domain=None):
@@ -31,8 +29,12 @@ class NewsScraper:
 
     def fetch_html(self, url):
         """Fetch the HTML of the news page, respecting domain-specific delays and error handling."""
-        # print(f'Fetching {url}...')
-        domain = urlparse(url).netloc
+        split = urlparse(url).netloc.split('.')
+        domain = split[1] if len(split) > 2 else split[0]
+
+        if domain in html_functions.skipped_domains:
+            return None
+
         current_time = time.time()
         retry_count = self.failure_count.get(domain, 0)
 
@@ -51,16 +53,23 @@ class NewsScraper:
             try:
                 response = requests.get(url, headers=headers)
                 response.raise_for_status()
-                html_content = response.text
+                html = response.text
 
-                if html_functions.captcha_encountered(html_content, domain) or html_functions.page_not_available(html_content, domain):
+                if html_functions.page_not_available(html, domain):
+                    logging.error(f"Page not available at {url}")
+                    return None
+
+                if html_functions.captcha_encountered(html, domain):
                     logging.error(f"Access issue at {url}")
                     retry_count += 1
                     self.failure_count[domain] = retry_count
                     time.sleep(retry_count * 10)  # Increase wait time for each retry
                     continue
-                return html_content
+                return html
             except requests.RequestException as e:
+                html = self.selenium_fetch_html(url)
+                if html:
+                    return html
                 logging.error(f"Request failed for {url}: {str(e)}")
                 print(f"Request failed for {url}: {str(e)}")
                 retry_count += 1
@@ -71,49 +80,61 @@ class NewsScraper:
         return None  # Return None after max retries
 
     def selenium_fetch_html(self, url):
-        """Fetch HTML using Selenium as a fallback method."""
         options = Options()
         options.headless = True
+        options.add_argument("--headless=new")
         options.add_argument(f'user-agent={self.user_agent.random}')
         driver = webdriver.Chrome(options=options)
+
+        split = urlparse(url).netloc.split('.')
+        domain = split[1] if len(split) > 2 else split[0]
 
         try:
             driver.get(url)
             time.sleep(2)
-            page_source = driver.page_source
+            html = driver.page_source
 
-            if captcha_encountered(page_source, urlparse(url).netloc) or page_not_available(page_source, urlparse(url).netloc):
+            if html_functions.page_not_available(html, domain):
+                logging.error(f"Page not available at {url}")
+                return None
+
+            if html_functions.captcha_encountered(html, domain):
                 logging.error(f"Access issue at {url} using Selenium")
                 return None
-            return page_source
+            return html
         except Exception as e:
             logging.error(f"Selenium fetch error for {url}: {str(e)}")
             return None
         finally:
             driver.quit()
 
-    def parse_article(self, url, html_dict=None):
+    def parse_article(self, url, html_dict=None, _html=None):
         """Parse the HTML to retrieve full news article text."""
-        html = self.fetch_html(url)
+        split = urlparse(url).netloc.split('.')
+        domain = split[1] if len(split) > 2 else split[0]
+        html = self.fetch_html(url) if _html is None else _html
         if html_dict is not None:
             html_dict[url] = html
         if html:
-
             prc_txt = lambda x: ' '.join(p.get_text().strip() for p in x)
             fn_dict = html_functions.domain_specific_full_text_select_mixed_functions
-            find_what = fn_dict.get(urlparse(url).netloc) or fn_dict.get(urlparse(url).netloc.replace('www.', ''))
+            find_what = fn_dict.get(domain) or fn_dict.get(domain)
             if callable(find_what):
                 article_text = find_what(html)
                 if not article_text:
                     return ''
-                if not isinstance(article_text, str):
+                if isinstance(article_text, tuple):
                     article_text = [prc_txt(x) for x in article_text]
                     len_lst = [len(x) for x in article_text]
                     article_text = article_text[len_lst.index(max(len_lst))]
+                elif not isinstance(article_text, str):
+                    article_text = ' '.join([prc_txt(x) for x in article_text])
                 else:
                     article_text = prc_txt(article_text)
             else:
-                tag_with_most_p_tags = html_functions.find_tag_with_most_tags(html=html, recursive=False, tags=('p',))
+                tag_with_most_p_tags = html_functions.find_tag_with_most_tags(html=html, tags=('p',))
+                if tag_with_most_p_tags is None:
+                    return ''
                 get_txt_from_tag = lambda *args: prc_txt(tag_with_most_p_tags.find_all(*args))
 
                 # text_all = get_txt_from_tag()
@@ -125,7 +146,6 @@ class NewsScraper:
                     article_text = get_txt_from_tag(find_what)
                 else:
                     article_text = get_txt_from_tag(*find_what)
-
             # article_text = force_all_text_if_short(article_text)
             ln2 = len(article_text) // 2
             print(url, f'len:{len(article_text)}', (article_text[:100] + '...' + article_text[ln2:ln2 + 100] + '...' + article_text[-100:]).replace('\n', ' '))
@@ -151,7 +171,9 @@ if __name__ == '__main__':
     # articles = scraper.parse_articles_batch(["https://edition.cnn.com/2024/03/25/tech/digital-markets-act-apple-google-meta"])
     # articles = scraper.parse_articles_batch(["https://www.business-standard.com/technology/tech-news/apple-debuts-long-awaited-ai-tools-including-chatgpt-tie-up-at-wwdc-124061100082_1.html"])
     # articles = scraper.parse_articles_batch(["https://pro.thestreet.com/story/16135076/1/let-s-look-at-amazon-s-big-day-why-this-company-is-no-small-fry-for-mcdonald-s.html"])
-    articles = scraper.parse_articles_batch(["https://www.investors.com/research/ibd-stock-analysis/amazon-stock-ai-bedrock-aws/"])
+    # articles = scraper.parse_articles_batch(["https://www.investors.com/research/ibd-stock-analysis/amazon-stock-ai-bedrock-aws/"])
+    articles = scraper.parse_articles_batch(["https://www.reuters.com/business/aerospace-defense/who-will-save-struggling-airline-sas-2023-09-27/"])
+    # articles = scraper.parse_articles_batch(["https://www.cnn.com/2023/09/27/sport/henrikh-mkhitaryan-armenia-nagorno-karabakh-spt-intl/index.html"])
     print(articles)
 
 
