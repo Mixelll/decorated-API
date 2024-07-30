@@ -70,7 +70,7 @@ class YahooFinanceTickerNewsScraper:
         articles = [x for x in items if '<span>Ad</span>' not in str(x)]
 
         for article in articles:
-            headline = article.find('h3').text
+            headline = article.find('h3').text_
             link = article.find('a')['href']
             full_link = link
 

@@ -8,6 +8,7 @@ domain_specific_full_text_select_mixed_functions = {
     'cnn': lambda x: BeautifulSoup(x, 'html.parser').select('div.article__content p'),
     # 'barrons': lambda x: BeautifulSoup(x, 'html.parser').select('div.article-content > p'),
     'reuters': lambda x: find_tag_with_most_tags(x, tags=('div',)).find_all('div'),
+    'cnbc': lambda x: BeautifulSoup(x, 'html.parser').select('div.ArticleBody-articleBody p'),
 }
 
 
@@ -27,7 +28,8 @@ domain_specific_length_and_captcha = {
 domain_specific_page_not_available = {}
 
 delay_times = {
-    'marketwatch': dict(base_delay=10, random_factor=30)
+    'marketwatch': dict(base_delay=10, random_factor=30),
+    'investingnews': dict(base_delay=5, random_factor=10)
 }
 
 skipped_domains = ['aljazeera']

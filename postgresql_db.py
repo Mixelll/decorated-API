@@ -2,6 +2,7 @@ import functools as ft
 import inspect
 import io
 import itertools as it
+import json
 import logging
 from uuid import uuid4
 
@@ -16,6 +17,8 @@ import sqlalchemy.dialects.postgresql as pg
 
 import extra_functions as ef
 from sqa_types import pd_determine_sqlalchemy_special_types, pd_determine_sqlalchemy_types
+
+from m_objects import JSONEncoderCustom
 
 
 def connect(*, dbname=None, user=None, password=None, **kwargs):
@@ -289,7 +292,7 @@ def vacuum_table(conn_or_engine, table, schema=None, analyze=False):
 
 
 def get_table_as_df(engine, table_name, schema=None, columns=None, params=None, index=None, between=None, except_columns=None, limit=None):
-    tbl = [schema, table_name]
+    tbl = [schema, table_name] if schema else table_name
     if params is None:
         params = []
     where_between = None if index is None or between is None else [index, between]
@@ -307,6 +310,32 @@ def get_table_as_df(engine, table_name, schema=None, columns=None, params=None, 
     else:
         query = fn_query()
     return query_get_df(engine, query, psg_params=params, index=index)
+
+
+def df_insert_prime(conn, df, tbl_name, prime_schema, dt_range_names=('start_date', 'end_date'), add_dict=None):
+    prime_name = prime_schema + '_prime'
+    if add_dict is None:
+        add_dict = {}
+    r = dt_range_names
+    dfInd = ef.df_return_ind_col(df, 'date')
+    # prime table column names
+    execV = {'name': tbl_name, 'ticker': tbl_name.split('_')[0],
+            'bar_size': tbl_name.split('_')[1], 'columns': list(df.columns),
+            'start_date': min(dfInd), 'end_date': max(dfInd),
+            'json': json.dumps(ef.df_freq_dict(df), cls=JSONEncoderCustom)}
+    execV |= add_dict
+
+    conflict = 'name'
+    set = [[r[0], '$least($', ([prime_name, r[0]],), '$,$', '%s)'],
+           [r[1], '$greatest($', ([prime_name, r[1]],), '$,$', '%s)'],
+           ['json', ([prime_name, 'json'],), '$||+$', '%s']]
+    setExecV = [execV[r[0]], execV[r[1]],  execV['json']]
+    insert_prime = composed_insert([prime_schema, prime_name], list(execV.keys()), conflict=conflict, set=set)
+
+    pg_execute(conn, insert_prime, list(execV.values()) + setExecV)
+    # c = [schema, tblName]
+    # create_trig =  db.create_trigger('_'.join(c + ["delete_prime"]), c,  'trigger_delete_row_from')
+    # db.pg_execute(conn, create_trig)
 
 
 def column_prev_date_part_ratio(sql_conn, ident, column, index='end_date', date_part='D', is_null=True,
@@ -379,6 +408,7 @@ def join_indexed_tables(conn, table_names, columns, index, join=None, schema=Non
     comp += S('WHERE {} ').format(I(index)) + cb
     return pd.read_sql_query(conn.cursor().mogrify(comp, execV), conn)
 
+
 def append_df_to_db_stdin(engine, ident, df, index=True):
     schema, tbl = ident
     conn = engine.raw_connection()
@@ -388,13 +418,19 @@ def append_df_to_db_stdin(engine, ident, df, index=True):
     conn.commit()
 
 
-def copy_df2db(cur, df, ident, index=True):
+def copy_df2db(cur, df, ident, index=True, columns=None):
+    columns = df.columns if columns is None else columns
+    if columns is not None:
+        # Include the index column name if index is True
+        if index:
+            columns = df.index.names + list(columns)
     output = io.StringIO()
     df.to_csv(output, sep='\t', header=True, index=index)
     output.seek(0)
     ident = I_2(ident)
+    query = S("COPY {} FROM STDIN DELIMITER '\t' CSV HEADER;").format(ident) if columns is None else S("COPY {} ({}) FROM STDIN DELIMITER '\t' CSV HEADER;").format(ident, composed_columns(columns))
     with output as f:
-        with cur.copy(S("COPY {} FROM STDIN DELIMITER '\t' CSV HEADER;").format(ident)) as copy:
+        with cur.copy(query) as copy:
             while data := f.read(100):
                 copy.write(data)
 
@@ -949,3 +985,4 @@ def set_comment(conn, tbl, comment, schema=None):
     schema = composed_dot(schema)
     query = S('COMMENT ON TABLE {}{} IS %s').format(schema, I(tbl))
     return pg_execute(conn, query, params=[str(comment)])
+

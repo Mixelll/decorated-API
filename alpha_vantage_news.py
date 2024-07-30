@@ -2,6 +2,7 @@ import inspect
 import json
 import logging
 import random
+from datetime import datetime
 
 import pandas as pd
 import requests
@@ -139,6 +140,7 @@ def test_article_accessibility(news_articles, select_domain=None):
 # @dt.df_manipulator_decorator(dt.concurrent_groupby_apply, groupby='domain', after=False, pass_function=True)
 @dt.copy_signature(get_historical_news)
 def get_historical_news_full(*args, **kwargs):
+    t = datetime.now()
     print(kwargs.get('time_from'), kwargs.get('time_to'))
     news_articles = get_historical_news(*args, **kwargs)
     date_range = news_articles[datetime_column].agg(['min', 'max'])
@@ -166,7 +168,7 @@ def get_historical_news_full(*args, **kwargs):
         # Fall back to row-wise processing if batch processing is not available
         news_articles['full_text'] = news_articles['url'].apply(scraper.parse_article, html_dict=html_dict)
     news_articles['html'] = news_articles['url'].map(html_dict).apply(lambda x: x.replace('\0', '') if x is not None else None)
-    print(f'Fetched full articles for {len(news_articles)} news articles.')
+    print(f'Fetched full articles for {len(news_articles)} news articles in {datetime.now() - t}.')
     return news_articles
 
 
@@ -180,3 +182,4 @@ if __name__ == "__main__":
     df = get_historical_news_full(api_key_, None, limit=1000, time_from='20230101T0000',
                                time_to=None, test_domains=False)
     df
+#     20240229T0500

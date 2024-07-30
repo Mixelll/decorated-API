@@ -20,10 +20,37 @@ from decortools import *
 from type_classes import *
 from base_functions import *
 
+import unittest
 
 # Setup logging configuration
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
+
+
+def replace_values_with_keys(big_list, keys_list, values_list):
+    """
+    Replace values in 'big_list' using 'keys_list' as references to insert values from 'values_list'.
+
+    Parameters:
+    big_list (list): The list where replacements will be made.
+    keys_list (list): The list containing keys that if found in 'big_list' will be replaced.
+    values_list (list): The list containing values that will replace keys in 'big_list'.
+
+    Returns:
+    None: The function modifies 'big_list' in place.
+    """
+    if len(keys_list) != len(values_list):
+        raise ValueError("keys_list and values_list must be of the same length")
+
+    # Create a mapping from keys to values
+    replacement_dict = dict(zip(keys_list, values_list))
+
+    # Replace elements in big_list based on the replacement_dict
+    for idx, item in enumerate(big_list):
+        if item in replacement_dict:
+            big_list[idx] = replacement_dict[item]
+
+    return big_list
 
 
 def get_methods(obj, spacing=20):
@@ -197,6 +224,8 @@ def pickle_load(file):
     return pickle_pkg.load(open(file, 'rb'))
 
 
+
+
 # Useful
 class SortedDeque(deque):
     def __init__(self, iterable=(), maxlen=None, compare=lambda x, y: x > y, accessor=lambda x: x, assert_fn=None):
@@ -212,6 +241,9 @@ class SortedDeque(deque):
             if not self.assert_fn(accessed_element):
                 return False
 
+        if check_only and (self.maxlen is None or len(self) < self.maxlen):
+            return True
+
         # Find the correct position for the new element and check or insert it
         for i, element in reversed(list(enumerate(self))):
             if self.compare(accessed_element, self.accessor(element)):
@@ -220,17 +252,56 @@ class SortedDeque(deque):
                 # Ensure there's space to insert the new element by removing from the start if at maxlen
                 if self.maxlen is not None and len(self) == self.maxlen:
                     self.popleft()  # Remove one item from the start to make space
-                self.insert(i, new_element)
+                    self.insert(i, new_element)
+                else:
+                    self.insert(i+1, new_element)
                 return None
 
         if self.maxlen is None or len(self) < self.maxlen:
-            if check_only:
-                return True
-            else:
-                self.insert(0, new_element)
-                return None
+            self.insert(0, new_element)
+            return None
         else:
             return False if check_only else None
+
+
+class TestSortedDeque(unittest.TestCase):
+    def test_insertions(self):
+        sd = SortedDeque()
+        sd.insert_sorted(5)
+        sd.insert_sorted(3)
+        sd.insert_sorted(8)
+        sd.insert_sorted(1)
+
+        self.assertTrue(self.is_sorted(sd))
+        self.assertEqual(list(sd), [1, 3, 5, 8])
+
+    def test_max_length(self):
+        sd = SortedDeque(maxlen=3)
+        sd.insert_sorted(5)
+        sd.insert_sorted(3)
+        sd.insert_sorted(8)
+        sd.insert_sorted(1)
+
+        self.assertTrue(self.is_sorted(sd))
+        self.assertEqual(list(sd), [1, 5, 8])
+
+    def test_assert_function(self):
+        sd = SortedDeque(assert_fn=lambda x: x % 2 == 0)
+        self.assertFalse(sd.insert_sorted(5))
+        sd.insert_sorted(4)
+        self.assertTrue(self.is_sorted(sd))
+        self.assertEqual(list(sd), [4])
+
+    def test_check_only_option(self):
+        sd = SortedDeque([2, 4, 6])
+        self.assertTrue(sd.insert_sorted(5, check_only=True))
+        self.assertTrue(self.is_sorted(sd))
+        self.assertEqual(list(sd), [2, 4, 6])
+
+    def is_sorted(self, deque):
+        # Check if the deque is sorted
+        return all(deque[i] <= deque[i + 1] for i in range(len(deque) - 1))
+
 
 
 def get_sub_lists_i(lst, i=0):
@@ -457,6 +528,8 @@ def ny_localize(ts):
 
 
 def df_freq_dict(df, index = 'date'):
+    if len(df) < 2:
+        return {}
     freqs = ['20Y','10Y', '5Y', '3Y', 'Y', 'Q', 'M', 'W', '2D', 'D', '3H', 'H',
             '15m', '5m', '1m', '15s', '5s', '1s']
     deltas = str2td(freqs)
@@ -869,3 +942,7 @@ def bars_size(delta, **kwargs):
     if isinstance(delta, str) or isinstance(delta, (list, tuple)) and isinstance(delta[0], str):
         delta = str2td(delta)
     return td2str_tq(time_quants, str2td(time_quants), delta, **kwargs)
+
+
+if __name__ == '__main__':
+    unittest.main()

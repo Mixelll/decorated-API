@@ -14,7 +14,7 @@ import html_functions
 
 
 class NewsScraper:
-    def __init__(self, base_delay=3, random_factor=10, max_retries=3, domain=None):
+    def __init__(self, base_delay=3, random_factor=7, max_retries=2, domain=None):
         if domain is not None:
             _base_delay = html_functions.delay_times.get(domain, {}).get('base_delay', base_delay)
             _random_factor = html_functions.delay_times.get(domain, {}).get('random_factor', random_factor)
@@ -65,10 +65,12 @@ class NewsScraper:
                     self.failure_count[domain] = retry_count
                     time.sleep(retry_count * 10)  # Increase wait time for each retry
                     continue
+                self.failure_count[domain] = 0
                 return html
             except requests.RequestException as e:
                 html = self.selenium_fetch_html(url)
                 if html:
+                    self.failure_count[domain] = 0
                     return html
                 logging.error(f"Request failed for {url}: {str(e)}")
                 print(f"Request failed for {url}: {str(e)}")
@@ -118,7 +120,7 @@ class NewsScraper:
         if html:
             prc_txt = lambda x: ' '.join(p.get_text().strip() for p in x)
             fn_dict = html_functions.domain_specific_full_text_select_mixed_functions
-            find_what = fn_dict.get(domain) or fn_dict.get(domain)
+            find_what = fn_dict.get(domain)
             if callable(find_what):
                 article_text = find_what(html)
                 if not article_text:
@@ -172,8 +174,11 @@ if __name__ == '__main__':
     # articles = scraper.parse_articles_batch(["https://www.business-standard.com/technology/tech-news/apple-debuts-long-awaited-ai-tools-including-chatgpt-tie-up-at-wwdc-124061100082_1.html"])
     # articles = scraper.parse_articles_batch(["https://pro.thestreet.com/story/16135076/1/let-s-look-at-amazon-s-big-day-why-this-company-is-no-small-fry-for-mcdonald-s.html"])
     # articles = scraper.parse_articles_batch(["https://www.investors.com/research/ibd-stock-analysis/amazon-stock-ai-bedrock-aws/"])
-    articles = scraper.parse_articles_batch(["https://www.reuters.com/business/aerospace-defense/who-will-save-struggling-airline-sas-2023-09-27/"])
+    # articles = scraper.parse_articles_batch(["https://www.reuters.com/business/aerospace-defense/who-will-save-struggling-airline-sas-2023-09-27/"])
     # articles = scraper.parse_articles_batch(["https://www.cnn.com/2023/09/27/sport/henrikh-mkhitaryan-armenia-nagorno-karabakh-spt-intl/index.html"])
+    # articles = scraper.parse_articles_batch(["https://www.cnbc.com/2024/07/05/crypto-market-bloodbath-as-mt-gox-bitcoin-btc-payout-approaches.html"])
+    # articles = scraper.parse_articles_batch(["https://decrypt.co/238283/south-korean-crypto-exchanges-guidelines-mass-delistings"])
+    # articles = scraper.parse_articles_batch(["https://investingnews.com/illumina-appoints-everett-cunningham-chief-commercial-officer/"])
     print(articles)
 
 
