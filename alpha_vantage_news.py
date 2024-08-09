@@ -135,7 +135,7 @@ def test_article_accessibility(news_articles, select_domain=None):
     print("\n" + "=" * 50 + "\n")
 
 
-@dt.dynamic_date_range_decorator(start_name='time_from', end_name='time_to', max_period='12h', result_date_accessor_fn=lambda x: x.attrs[attrs_date_range], aggregate_fn=lambda x: pd.concat(x))
+@dt.dynamic_date_range_decorator(start_name='time_from', end_name='time_to', max_period='12h', result_date_accessor_fn=lambda x: x.attrs[attrs_date_range], aggregate_fn=None)  # lambda x: pd.concat(x))
 @mdb.upsert_df2db_decorator(**TABLE_ID)
 # @dt.df_manipulator_decorator(dt.concurrent_groupby_apply, groupby='domain', after=False, pass_function=True)
 @dt.copy_signature(get_historical_news)
@@ -180,6 +180,6 @@ if __name__ == "__main__":
     # df
     # , topics='technology'
     df = get_historical_news_full(api_key_, None, limit=1000, time_from='20230101T0000',
-                               time_to=None, test_domains=False)
+                               time_to='20240115T1120', test_domains=False)
     df
-#     20240229T0500
+#     20240125T1700

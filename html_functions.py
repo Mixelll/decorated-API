@@ -28,7 +28,7 @@ domain_specific_length_and_captcha = {
 domain_specific_page_not_available = {}
 
 delay_times = {
-    'marketwatch': dict(base_delay=10, random_factor=30),
+    'marketwatch': dict(base_delay=15, random_factor=30),
     'investingnews': dict(base_delay=5, random_factor=10)
 }
 
