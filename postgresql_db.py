@@ -29,7 +29,7 @@ def create_engine(*, dbname, user, password, **kwargs):
     return sqa.create_engine(f'postgresql+psycopg://{user}:{password}@localhost:5432/{dbname}', **kwargs)
 
 
-def upsert_dataframe_sqa(engine, df, table, schema=None, primary_keys=None):
+def upsert_dataframe_sqa(engine, df, table, schema=None, primary_keys=None, del_df=False):
     """
     Perform an upsert operation (from a df) on a PostgreSQL table using SQLAlchemy.
 
@@ -86,6 +86,8 @@ def upsert_dataframe_sqa(engine, df, table, schema=None, primary_keys=None):
         with conn.begin() as t:
             result = conn.execute(stmt)
             logging.info(f"Rows inserted/updated: {result.rowcount}")
+    if del_df:
+        del df
 
 
 def return_df_rows_not_in_table(engine, df, table_name, schema=None, primary_keys=None, suppress_error_no_table_exists=False, add_column_instead=None):
@@ -188,7 +190,7 @@ def upsert_df_add_columns_sqa_old(engine, table, schema=None, primary_keys=None)
     return decorator_upsert
 
 
-def update_table_schema_sqa(engine, df, table_name, schema=None, primary_keys=None):
+def update_table_schema_sqa(engine, df, table_name, schema=None, **kwargs):
     metadata = MetaData()
     try:
         metadata.reflect(bind=engine, only=[table_name], schema=schema)

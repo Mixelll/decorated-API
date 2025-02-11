@@ -14,7 +14,7 @@ import html_functions
 
 
 class NewsScraper:
-    def __init__(self, base_delay=3, random_factor=7, max_retries=2, domain=None):
+    def __init__(self, base_delay=2, random_factor=5, max_retries=2, domain=None):
         if domain is not None:
             _base_delay = html_functions.delay_times.get(domain, {}).get('base_delay', base_delay)
             _random_factor = html_functions.delay_times.get(domain, {}).get('random_factor', random_factor)
@@ -177,8 +177,10 @@ if __name__ == '__main__':
     # articles = scraper.parse_articles_batch(["https://www.reuters.com/business/aerospace-defense/who-will-save-struggling-airline-sas-2023-09-27/"])
     # articles = scraper.parse_articles_batch(["https://www.cnn.com/2023/09/27/sport/henrikh-mkhitaryan-armenia-nagorno-karabakh-spt-intl/index.html"])
     # articles = scraper.parse_articles_batch(["https://www.cnbc.com/2024/07/05/crypto-market-bloodbath-as-mt-gox-bitcoin-btc-payout-approaches.html"])
-    # articles = scraper.parse_articles_batch(["https://decrypt.co/238283/south-korean-crypto-exchanges-guidelines-mass-delistings"])
-    # articles = scraper.parse_articles_batch(["https://investingnews.com/illumina-appoints-everett-cunningham-chief-commercial-officer/"])
+    # url = "https://decrypt.co/238283/south-korean-crypto-exchanges-guidelines-mass-delistings"
+    # url = "https://investingnews.com/illumina-appoints-everett-cunningham-chief-commercial-officer/"
+    # url = "https://investingnews.com/daily/resource-investing/precious-metals-investing/gold-investing/history-gold-standard/"
+    # url = "https://investingnews.com/blinklab-limited-transforming-mental-healthcare-through-mobile-based-ai-app/"
     print(articles)
 
 

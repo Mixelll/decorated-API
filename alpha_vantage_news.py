@@ -73,9 +73,9 @@ def get_historical_news(api_key, symbol, limit=1000, topics=None, time_from=None
         if test_domains:
             return test_article_accessibility(news_articles, select_domain=domain)
         else:
-            print(len(news_articles), "news articles found.")
             news_articles = pd.DataFrame(news_articles)
             news_articles.drop_duplicates(subset='url', inplace=True)
+            print(len(news_articles), "unique news articles found.")
             return news_articles
     else:
         logging.error(data)
@@ -135,8 +135,8 @@ def test_article_accessibility(news_articles, select_domain=None):
     print("\n" + "=" * 50 + "\n")
 
 
-@dt.dynamic_date_range_decorator(start_name='time_from', end_name='time_to', max_period='12h', result_date_accessor_fn=lambda x: x.attrs[attrs_date_range], aggregate_fn=None)  # lambda x: pd.concat(x))
-@mdb.upsert_df2db_decorator(**TABLE_ID)
+@dt.dynamic_date_range_decorator(start_name='time_from', end_name='time_to', max_period='12h', min_period='1h', result_date_accessor_fn=lambda x: x.attrs[attrs_date_range], aggregate_fn=None)  # lambda x: pd.concat(x))
+@mdb.upsert_df2db_decorator(**TABLE_ID, del_df=True)
 # @dt.df_manipulator_decorator(dt.concurrent_groupby_apply, groupby='domain', after=False, pass_function=True)
 @dt.copy_signature(get_historical_news)
 def get_historical_news_full(*args, **kwargs):
@@ -179,7 +179,8 @@ if __name__ == "__main__":
     #                            time_to=None, test_domains=False)
     # df
     # , topics='technology'
-    df = get_historical_news_full(api_key_, None, limit=1000, time_from='20230101T0000',
-                               time_to='20240115T1120', test_domains=False)
-    df
-#     20240125T1700
+    get_historical_news_full(api_key_, None, limit=1000, time_from='20220101T0000', time_to=None, test_domains=False)
+#     20230529T1101
+#     20240810T0015
+# 20220301T0322
+#     20220913T1437
